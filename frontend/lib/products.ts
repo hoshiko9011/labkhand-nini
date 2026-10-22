@@ -81,10 +81,11 @@ function mapProduct(item: StrapiProduct): Product {
 }
 
 export async function getProducts(): Promise<Product[]> {
+  const defaults = localProducts as Product[];
   const strapiUrl = getStrapiUrl();
 
   if (!strapiUrl) {
-    return localProducts as Product[];
+    return defaults;
   }
 
   try {
@@ -93,12 +94,17 @@ export async function getProducts(): Promise<Product[]> {
       { cache: "no-store" },
     );
 
-    if (!response.ok) return [];
+    // Strapi configured but unreachable / error → fall back to local catalogue
+    if (!response.ok) return defaults;
 
     const result = (await response.json()) as ProductsResponse;
+    if (!Array.isArray(result.data) || result.data.length === 0) {
+      return defaults;
+    }
+
     return result.data.map(mapProduct);
   } catch {
-    return [];
+    return defaults;
   }
 }
 
