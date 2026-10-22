@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import ProductComments from "@/app/components/ProductComments";
+import { auth } from "@/auth";
 import { getDiscountedPrice, getProductBySlug } from "@/lib/products";
 import { getSiteSettings } from "@/lib/site-settings";
 
@@ -30,9 +31,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function ProductDetailPage({ params }: PageProps) {
   const { slug } = await params;
 
-  const [product, settings] = await Promise.all([
+  const [product, settings, session] = await Promise.all([
     getProductBySlug(slug),
     getSiteSettings(),
+    auth(),
   ]);
 
   if (!product) {
@@ -41,6 +43,8 @@ export default async function ProductDetailPage({ params }: PageProps) {
 
   const hasDiscount = product.discount > 0;
   const isInStock = product.stock > 0;
+  // Logged-in users can moderate comments (demo admin)
+  const isAdmin = Boolean(session?.user);
 
   return (
     <main className="mx-auto min-h-[60vh] w-full max-w-6xl px-5 py-10 sm:px-8 sm:py-16">
@@ -104,7 +108,11 @@ export default async function ProductDetailPage({ params }: PageProps) {
         </div>
       </div>
 
-      <ProductComments productSlug={product.slug} productTitle={product.title} />
+      <ProductComments
+        productSlug={product.slug}
+        productTitle={product.title}
+        isAdmin={isAdmin}
+      />
     </main>
   );
 }
