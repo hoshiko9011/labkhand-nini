@@ -4,6 +4,9 @@ import Credentials from "next-auth/providers/credentials";
 const STRAPI_URL = process.env.STRAPI_URL?.replace(/\/$/, "");
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  // Helps local/dev hosts; still requires AUTH_SECRET in .env.local
+  trustHost: true,
+
   session: {
     strategy: "jwt",
   },
