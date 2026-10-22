@@ -7,22 +7,30 @@ type Comment = {
   name: string;
   text: string;
   createdAt: string;
+  likes: number;
 };
 
 type ProductCommentsProps = {
   productSlug: string;
   productTitle: string;
+  /** Logged-in users can moderate (delete) comments */
+  isAdmin?: boolean;
 };
 
-const storageKey = (slug: string) => "labkhand-comments:" + slug;
+const commentsKey = (slug: string) => "labkhand-comments:" + slug;
+const likedKey = (slug: string) => "labkhand-liked:" + slug;
 
 function loadComments(slug: string): Comment[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(storageKey(slug));
+    const raw = localStorage.getItem(commentsKey(slug));
     if (!raw) return [];
     const parsed = JSON.parse(raw) as Comment[];
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((c) => ({
+      ...c,
+      likes: typeof c.likes === "number" ? c.likes : 0,
+    }));
   } catch {
     return [];
   }
@@ -30,17 +38,39 @@ function loadComments(slug: string): Comment[] {
 
 function saveComments(slug: string, comments: Comment[]) {
   try {
-    localStorage.setItem(storageKey(slug), JSON.stringify(comments));
+    localStorage.setItem(commentsKey(slug), JSON.stringify(comments));
   } catch {
     // ignore quota / private mode errors
+  }
+}
+
+function loadLiked(slug: string): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = localStorage.getItem(likedKey(slug));
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw) as string[];
+    return new Set(Array.isArray(parsed) ? parsed : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveLiked(slug: string, liked: Set<string>) {
+  try {
+    localStorage.setItem(likedKey(slug), JSON.stringify([...liked]));
+  } catch {
+    // ignore
   }
 }
 
 export default function ProductComments({
   productSlug,
   productTitle,
+  isAdmin = false,
 }: ProductCommentsProps) {
   const [comments, setComments] = useState<Comment[]>([]);
+  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
   const [name, setName] = useState("");
   const [text, setText] = useState("");
   const [ready, setReady] = useState(false);
@@ -48,6 +78,7 @@ export default function ProductComments({
 
   useEffect(() => {
     setComments(loadComments(productSlug));
+    setLikedIds(loadLiked(productSlug));
     setReady(true);
   }, [productSlug]);
 
@@ -76,12 +107,45 @@ export default function ProductComments({
       name: trimmedName.slice(0, 40),
       text: trimmedText,
       createdAt: new Date().toISOString(),
+      likes: 0,
     };
 
     const updated = [next, ...comments];
     setComments(updated);
     saveComments(productSlug, updated);
     setText("");
+  }
+
+  function toggleLike(id: string) {
+    const already = likedIds.has(id);
+    const nextLiked = new Set(likedIds);
+    if (already) nextLiked.delete(id);
+    else nextLiked.add(id);
+
+    const updated = comments.map((c) => {
+      if (c.id !== id) return c;
+      const delta = already ? -1 : 1;
+      return { ...c, likes: Math.max(0, (c.likes || 0) + delta) };
+    });
+
+    setLikedIds(nextLiked);
+    setComments(updated);
+    saveLiked(productSlug, nextLiked);
+    saveComments(productSlug, updated);
+  }
+
+  function handleDelete(id: string) {
+    if (!isAdmin) return;
+    if (!window.confirm("این نظر حذف بشه؟")) return;
+
+    const updated = comments.filter((c) => c.id !== id);
+    setComments(updated);
+    saveComments(productSlug, updated);
+
+    const nextLiked = new Set(likedIds);
+    nextLiked.delete(id);
+    setLikedIds(nextLiked);
+    saveLiked(productSlug, nextLiked);
   }
 
   function formatDate(iso: string) {
@@ -109,6 +173,11 @@ export default function ProductComments({
       <p className="mt-2 text-sm text-[#817477]">
         تجربه‌ات رو با بقیه والدین به اشتراک بذار. نظرات روی این دستگاه ذخیره
         می‌شن.
+        {isAdmin && (
+          <span className="mt-1 block text-xs font-semibold text-[#a84766]">
+            حالت مدیر: می‌تونی نظرات رو حذف کنی.
+          </span>
+        )}
       </p>
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
@@ -170,25 +239,56 @@ export default function ProductComments({
             هنوز نظری ثبت نشده. اولین نفر باش! 💕
           </p>
         ) : (
-          comments.map((c) => (
-            <article
-              key={c.id}
-              className="rounded-2xl border border-[#f0e4e3] bg-[#fffaf6] px-4 py-4"
-            >
-              <header className="flex flex-wrap items-baseline justify-between gap-2">
-                <strong className="text-sm font-bold text-[#553d44]">
-                  {c.name}
-                </strong>
-                <time
-                  dateTime={c.createdAt}
-                  className="text-xs text-[#a49a9c]"
-                >
-                  {formatDate(c.createdAt)}
-                </time>
-              </header>
-              <p className="mt-2 text-sm leading-7 text-[#443a3c]">{c.text}</p>
-            </article>
-          ))
+          comments.map((c) => {
+            const liked = likedIds.has(c.id);
+            return (
+              <article
+                key={c.id}
+                className="rounded-2xl border border-[#f0e4e3] bg-[#fffaf6] px-4 py-4"
+              >
+                <header className="flex flex-wrap items-baseline justify-between gap-2">
+                  <strong className="text-sm font-bold text-[#553d44]">
+                    {c.name}
+                  </strong>
+                  <time
+                    dateTime={c.createdAt}
+                    className="text-xs text-[#a49a9c]"
+                  >
+                    {formatDate(c.createdAt)}
+                  </time>
+                </header>
+                <p className="mt-2 text-sm leading-7 text-[#443a3c]">{c.text}</p>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => toggleLike(c.id)}
+                    className={
+                      "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold transition " +
+                      (liked
+                        ? "border-[#c65f7d] bg-[#fff0f3] text-[#a84766]"
+                        : "border-[#f0e4e3] bg-white text-[#69595d] hover:border-[#c65f7d] hover:text-[#a84766]")
+                    }
+                    aria-pressed={liked}
+                    aria-label={liked ? "برداشتن لایک" : "لایک کردن نظر"}
+                  >
+                    <span aria-hidden="true">{liked ? "♥" : "♡"}</span>
+                    <span>{new Intl.NumberFormat("fa-IR").format(c.likes || 0)}</span>
+                  </button>
+
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(c.id)}
+                      className="rounded-full border border-[#f0e4e3] bg-white px-3 py-1.5 text-xs font-bold text-[#a84766] transition hover:border-[#c65f7d] hover:bg-[#fff0f3]"
+                    >
+                      حذف
+                    </button>
+                  )}
+                </div>
+              </article>
+            );
+          })
         )}
       </div>
     </section>
