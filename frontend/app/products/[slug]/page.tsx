@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import ProductComments from "@/app/components/ProductComments";
 import { getDiscountedPrice, getProductBySlug } from "@/lib/products";
 import { getSiteSettings } from "@/lib/site-settings";
 
@@ -102,6 +103,8 @@ export default async function ProductDetailPage({ params }: PageProps) {
           </Link>
         </div>
       </div>
+
+      <ProductComments productSlug={product.slug} productTitle={product.title} />
     </main>
   );
 }
