@@ -64,7 +64,7 @@ Content and products live in **Strapi CMS**, so merchandisers can update prices,
 |-------|--------|
 | CMS / API | **Strapi 5** |
 | Content | Products · Categories · Orders · Storefront Settings |
-| Database | PostgreSQL (recommended) / SQLite for local experiments |
+| Database | PostgreSQL (recommended) / SQLite (default for local development) |
 
 ```text
 Browser  ──▶  Next.js storefront  ──▶  Strapi API  ──▶  Database
@@ -79,7 +79,7 @@ Browser  ──▶  Next.js storefront  ──▶  Strapi API  ──▶  Databa
 
 - **Node.js** 20+
 - **npm** 6+
-- A running **PostgreSQL** database (for production-like Strapi setup)
+- A running **PostgreSQL** database for PostgreSQL setup (SQLite is used by default for local development)
 - Optional: Strapi admin access to publish products
 
 ### 1. Clone the repository
@@ -94,7 +94,22 @@ cd labkhand-nini
 ```bash
 cd backend
 cp .env.example .env
-# Edit .env — set database credentials and secrets
+# Edit .env — set the secrets
+```
+
+For PostgreSQL, create a database and user, then add these settings to `backend/.env`, replacing the password with the one configured for that user. Without `DATABASE_CLIENT=postgres`, Strapi uses SQLite by default.
+
+```env
+DATABASE_CLIENT=postgres
+DATABASE_HOST=localhost
+DATABASE_PORT=5432
+DATABASE_NAME=strapi
+DATABASE_USERNAME=strapi
+DATABASE_PASSWORD=replace-with-your-database-password
+DATABASE_SCHEMA=public
+```
+
+```bash
 npm install
 npm run develop
 ```
@@ -134,7 +149,7 @@ Visit **http://localhost:3000** 🌷
 ### 4. Quality checks (before release)
 
 ```bash
-cd frontend
+# from frontend/
 npm run typecheck
 npm run lint
 npm run build
